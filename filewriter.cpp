@@ -18,10 +18,12 @@ FileWriter::~FileWriter() {
 
 bool FileWriter::Create(const std::string pathFile) {
     std::lock_guard<std::mutex> lck(m_mutexWrite);
+    m_ptsVideo=0;
+    m_ptsAudio=0;
     m_context=avformat_alloc_context();
     m_context->oformat=av_guess_format(nullptr, pathFile.c_str(), nullptr);
     strcpy(m_context->filename, pathFile.c_str());
-    m_context->flags|=
+    m_context->flags|=0;
     m_context->debug=1;
     if(avio_open(&m_context->pb, pathFile.c_str(), AVIO_FLAG_WRITE)<0) {
         std::cerr<<"Could not open "<<pathFile<<std::endl;

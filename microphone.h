@@ -19,8 +19,8 @@ private:
     bcm2835_peripheral peripheralPcm={ PCM_BASE };
     bcm2835_peripheral peripheralClk={ CLK_BASE };
     bcm2835_peripheral peripheralDma={ DMA_BASE };
-    bcm2835_peripheral peripheralDmaBuffer;
-    bcm2835_peripheral peripheralDmaCb;
+    bcm2835_peripheral peripheralDmaBuffer={0};
+    bcm2835_peripheral peripheralDmaCb={0};
     static const size_t m_countDmaBuf=44100*4;
     unsigned m_posRead=0;
     int16_t m_lastOut=0, m_lastInput=0;

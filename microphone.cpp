@@ -28,8 +28,8 @@ Microphone::Microphone()
 
     volatile uint32_t* gpiofsel1=&reinterpret_cast<volatile uint32_t*>(gpio.map)[1];
     volatile uint32_t* gpiofsel2=&reinterpret_cast<volatile uint32_t*>(gpio.map)[2];
-    *gpiofsel1=0b00100100000000000000000000000000;
-    *gpiofsel2=0b00000000000000000000000000100100;
+    *gpiofsel1=*gpiofsel1 & 0b11000000111111111111111111111111 | 0b00100100000000000000000000000000;
+    *gpiofsel2=*gpiofsel2 & 0b11111111111111111111111111000000 | 0b00000000000000000000000000100100;
 
     if(map_peripheral(&peripheralPcm)==-1) {
         std::clog<<"Failed to map the pcm registers into the virtual memory space."<<std::endl;
@@ -67,14 +67,22 @@ Microphone::Microphone()
 Microphone::~Microphone() {
     Stop();
 
-    unmap_peripheral(&peripheralDma);
-    unmap_peripheral(&peripheralClk);
-    unmap_peripheral(&peripheralPcm);
-    free_phys_mem(peripheralDmaBuffer);
+    if(peripheralDma.map) unmap_peripheral(&peripheralDma);
+    if(peripheralClk.map) unmap_peripheral(&peripheralClk);
+    if(peripheralPcm.map) unmap_peripheral(&peripheralPcm);
+    if(peripheralDmaBuffer.map) free_phys_mem(peripheralDmaBuffer);
+
+    peripheralPcm={ PCM_BASE };
+    peripheralClk={ CLK_BASE };
+    peripheralDma={ DMA_BASE };
+    peripheralDmaBuffer={0};
+    peripheralDmaCb={0};
 }
 
 bool Microphone::Start() {
     std::cout<<"Start recording"<<std::endl;
+
+    if(!peripheralDma.map || !peripheralPcm.map) return false;
 
     volatile bcm2835_dma_channel* dma=reinterpret_cast<volatile bcm2835_dma_channel*>(peripheralDma.map);
     dma[3].CS=0b10000000000000000000000000000000;
@@ -91,6 +99,8 @@ bool Microphone::Start() {
 }
 
 void Microphone::Stop() {
+    if(!peripheralDma.map || !peripheralPcm.map) return;
+
     volatile bcm2835_dma_channel* dma=reinterpret_cast<volatile bcm2835_dma_channel*>(peripheralDma.map);
     dma[3].CS=0b10000000000000000000000000000000;
     volatile bcm2835_pcm* pcm=reinterpret_cast<volatile bcm2835_pcm*>(peripheralPcm.map);
@@ -99,6 +109,8 @@ void Microphone::Stop() {
 }
 
 size_t Microphone::Read(int16_t* data, size_t count) {
+    if(!peripheralDma.map) return 0;
+
     volatile bcm2835_dma_channel* dma=reinterpret_cast<volatile bcm2835_dma_channel*>(peripheralDma.map);
 
     if(count*4>m_countDmaBuf/2) {

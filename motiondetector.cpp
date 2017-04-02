@@ -1,4 +1,5 @@
 #include "motiondetector.h"
+#include "config.h"
 
 #include <iostream>
 #include <fstream>
@@ -24,7 +25,7 @@ MotionDetector::MotionDetector(int width, int height, AVPixelFormat format):
         DETECT_WIDTH, DETECT_HEIGHT, AV_PIX_FMT_GRAY8,
         SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
-    loadMask("mask.ppm");
+    loadMask(PATH_MASK);
 }
 
 MotionDetector::~MotionDetector() {
@@ -72,9 +73,9 @@ bool MotionDetector::loadMask(const std::string path) {
         return false;
     }
 
-    uint8_t buf[DETECT_WIDTH*DETECT_HEIGHT];
-    s.read(reinterpret_cast<char*>(buf), DETECT_WIDTH*DETECT_HEIGHT);
-    if(s.gcount()!=DETECT_WIDTH*DETECT_HEIGHT) {
+    uint8_t buf[DETECT_WIDTH*DETECT_HEIGHT*3];
+    s.read(reinterpret_cast<char*>(buf), sizeof(buf));
+    if(s.gcount()!=sizeof(buf)) {
         std::clog<<"Invalid mask file size"<<std::endl;
         return false;
     }
@@ -260,9 +261,9 @@ bool MotionDetector::Detect(const uint8_t* frame, size_t length) {
     //std::cout<<countDiff<<' '<<isMotion<<std::endl;
 
     if(isMotion) {
-        std::stringstream s;
-        s<<"diff_"<<std::setw(5)<<std::setfill('0')<<m_counter<<".ppm";
-        dumpImage(imageObj, DETECT_WIDTH*DETECT_HEIGHT, DETECT_WIDTH, DETECT_HEIGHT, s.str());
+        //std::stringstream s;
+        //s<<"diff_"<<std::setw(5)<<std::setfill('0')<<m_counter<<".ppm";
+        //dumpImage(imageObj, DETECT_WIDTH*DETECT_HEIGHT, DETECT_WIDTH, DETECT_HEIGHT, s.str());
 
         m_counter++;
     }

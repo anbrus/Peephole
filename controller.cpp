@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "cameracapture.h"
 #include "camerapreviewport.h"
+#include "config.h"
 
 #include "bcm_host.h"
 
@@ -17,15 +18,17 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
+Controller* pController=nullptr;
+
 Controller::Controller():
     m_md(SCREEN_WIDTH, SCREEN_HEIGHT, AV_PIX_FMT_RGB565),
     m_captureVideo(m_cam)
 {
-
+    pController=this;
 }
 
 Controller::~Controller() {
-
+    pController=nullptr;
 }
 
 uint8_t* Controller::getScreenImage(const uint8_t* frame, size_t length) {
@@ -65,8 +68,8 @@ void Controller::onPreviewFrame(const uint8_t* data, size_t length) {
 void Controller::onCaptureFrame(const uint8_t* data, size_t length, int typeFrame) {
     switch(typeFrame) {
     case 0: m_file.WriteVideo(data, length, false); break;
-    case 1: m_file.WriteVideo(data, length, true); break;
-    case 2: m_file.WriteHeader(data, length); break;
+    case 1: m_file.WriteVideo(data, length, true);  break;
+    case 2: m_file.WriteHeader(data, length);  break;
     }
 
     std::chrono::steady_clock::duration elapsed=std::chrono::steady_clock::now()-m_timeLastMotion;
@@ -92,7 +95,7 @@ void Controller::startCapture() {
     std::tm tm = *std::localtime(&now);
     char timeStr[64];
     std::strftime(timeStr, 64, "%Y%m%d_%H%M%S", &tm);
-    s<<"motion_"<<timeStr<<".mp4";
+    s<<PATH_VIDEO<<"/motion_"<<timeStr<<".mp4";
     m_file.Create(s.str());
     //m_file.WriteHeader();
 
@@ -120,8 +123,17 @@ void Controller::postRunnable(const std::function<void()>& runnable) {
     m_cvQueue.notify_all();
 }
 
+void Controller::onSignalTerm(int signal) {
+    if(!pController) return;
+
+    pController->m_stop=true;
+}
+
 int Controller::Run() {
+    signal(SIGTERM, onSignalTerm);
     bcm_host_init();
+
+    //std::this_thread::sleep_for(std::chrono::seconds(2)); //Wait for xserver start
 
     m_wnd.Show();
     m_contextScale=sws_getContext(
@@ -140,18 +152,15 @@ int Controller::Run() {
 
     while(m_counterCameraInit) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     /*startCapture();
-    std::this_thread::sleep_for(std::chrono::seconds(8));
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    stopCapture();
+    startCapture();
+    std::this_thread::sleep_for(std::chrono::seconds(4));
     stopCapture();*/
-    /*for(int n=0; n<50; n++) {
-        startCapture();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        stopCapture();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }*/
 
     std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point stop=start+std::chrono::hours(10);
-    while(std::chrono::steady_clock::now()<stop) {
+    std::chrono::steady_clock::time_point stop=start+std::chrono::seconds(300);
+    while(!m_stop) { //std::chrono::steady_clock::now()<stop) {
         std::unique_lock<std::mutex> lck(m_mutexQueue);
         m_cvQueue.wait_for(lck, std::chrono::seconds(1), [this]{ return !m_queue.empty(); });
         while(!m_queue.empty()) {
@@ -159,8 +168,6 @@ int Controller::Run() {
             m_queue.pop();
         }
     }
-
-    //std::this_thread::sleep_for(std::chrono::seconds(600));
 
     p.Stop(m_cam);
 

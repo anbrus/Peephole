@@ -45,6 +45,17 @@ void WindowPreview::Close() {
 void WindowPreview::ShowFrame(const uint8_t* data, size_t length) {
     if(!m_display) return;
 
+    /*GC gc;
+    XGCValues values;
+    unsigned long valuemask;
+    values.foreground = BlackPixel(m_display, 0);
+    values.background = WhitePixel(m_display, 0);
+    gc = XCreateGC(m_display, m_window, (GCForeground | GCBackground), &values);
+    XDrawLine(m_display, m_window, gc, 0, 0, 100, 100);
+    XFlushGC(m_display, gc);
+    XFreeGC(m_display, gc);
+    return;*/
+
     uint8_t* buf=reinterpret_cast<uint8_t*>(malloc(SCREEN_WIDTH*SCREEN_HEIGHT*2));
     memcpy(buf, data, length);
     Visual *visual=DefaultVisual(m_display, 0);

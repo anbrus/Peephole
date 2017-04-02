@@ -40,6 +40,7 @@ private:
     std::queue<std::function<void()>> m_queue;
     std::condition_variable m_cvQueue;
     std::mutex m_mutexQueue;
+    bool m_stop=false;
 
     uint8_t* getScreenImage(const uint8_t* frame, size_t length);
     void onPreviewFrame(const uint8_t* data, size_t length);
@@ -49,5 +50,6 @@ private:
     void startCapture();
     void stopCapture();
     void postRunnable(const std::function<void()>& runnable);
+    static void onSignalTerm(int signal);
 };
 

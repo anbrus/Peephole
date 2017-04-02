@@ -97,11 +97,17 @@ bool CameraCapture::createEncoder() {
     }catch(const MmalException& e) {
         std::cerr<<e.GetFile()<<':'<<e.GetLine()<<": "<<e.what()<<std::endl;
 
-        if(m_encoder) mmal_component_destroy(m_encoder);
+        if(m_encoder) {
+            mmal_component_destroy(m_encoder);
+            m_encoder=nullptr;
+        }
     }catch(const std::string& e) {
         std::cerr<<e<<std::endl;
 
-        if(m_encoder) mmal_component_destroy(m_encoder);
+        if(m_encoder) {
+            mmal_component_destroy(m_encoder);
+            m_encoder=nullptr;
+        }
     }
 
     return ret;
@@ -143,21 +149,21 @@ void CameraCapture::onCaptureData(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffe
         mmal_buffer_header_mem_unlock(buffer);
     }else
         if(buffer->cmd==0 && capture->m_handler && buffer->length>0) {
-        mmal_buffer_header_mem_lock(buffer);
-        capture->m_bufferFrame.insert(capture->m_bufferFrame.end(), buffer->data, buffer->data+buffer->length);
-        mmal_buffer_header_mem_unlock(buffer);
+            mmal_buffer_header_mem_lock(buffer);
+            capture->m_bufferFrame.insert(capture->m_bufferFrame.end(), buffer->data, buffer->data+buffer->length);
+            mmal_buffer_header_mem_unlock(buffer);
 
-        if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
-            //std::cout<<"Send "<<capture->m_bufferFrame.size()<<std::endl;
-            uint32_t len=capture->m_bufferFrame.size()-4;
-            capture->m_bufferFrame[3]=len&0xFF; len>>=8;
-            capture->m_bufferFrame[2]=len&0xFF; len>>=8;
-            capture->m_bufferFrame[1]=len&0xFF; len>>=8;
-            capture->m_bufferFrame[0]=len&0xFF; len>>=8;
-            capture->m_handler(capture->m_bufferFrame.data(), capture->m_bufferFrame.size(), buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME ? 1 : 0);
-            capture->m_bufferFrame.clear();
+            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
+                //std::cout<<"Send "<<capture->m_bufferFrame.size()<<std::endl;
+                uint32_t len=capture->m_bufferFrame.size()-4;
+                capture->m_bufferFrame[3]=len&0xFF; len>>=8;
+                capture->m_bufferFrame[2]=len&0xFF; len>>=8;
+                capture->m_bufferFrame[1]=len&0xFF; len>>=8;
+                capture->m_bufferFrame[0]=len&0xFF; len>>=8;
+                capture->m_handler(capture->m_bufferFrame.data(), capture->m_bufferFrame.size(), buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME ? 1 : 0);
+                capture->m_bufferFrame.clear();
+            }
         }
-    }
 
     mmal_buffer_header_release(buffer);
 
@@ -188,6 +194,8 @@ void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 
 bool CameraCapture::Start() {
     bool ret=false;
+    m_bufferFrame.clear();
+    m_bufferExtra.clear();
 
     try {
         if(m_poolEncoder) {
