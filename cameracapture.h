@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <vector>
+#include <mutex>
 
 #include "interface/mmal/util/mmal_connection.h"
 
@@ -18,7 +19,7 @@ public:
     void SetCaptureHandler(std::function<void (const uint8_t*, size_t, int)> handler);
 
 private:
-    std::function<void (const uint8_t*, size_t, int)> m_handler;
+    std::function<void (const uint8_t*, size_t, int)> m_handlerFrame;
     MMAL_POOL_T *m_poolEncoder=nullptr;
     MMAL_COMPONENT_T *m_encoder=nullptr;
     MMAL_CONNECTION_T *m_connection=nullptr;

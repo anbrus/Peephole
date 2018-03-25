@@ -1,6 +1,7 @@
 #include "cameracapture.h"
 
 #include "mmalexception.h"
+#include "config.h"
 
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_default_components.h"
@@ -13,9 +14,6 @@
 
 #define CAPTURE_FRAME_RATE_NUM 5
 #define CAPTURE_FRAME_RATE_DEN 1
-
-#define FRAME_WIDTH 1920
-#define FRAME_HEIGHT 1080
 
 #define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
 
@@ -38,9 +36,8 @@ CameraCapture::~CameraCapture() {
 }
 
 void CameraCapture::SetCaptureHandler(std::function<void (const uint8_t*, size_t, int)> handler) {
-    m_handler=handler;
+    m_handlerFrame=handler;
 }
-
 
 bool CameraCapture::createEncoder() {
     bool ret=false;
@@ -144,11 +141,11 @@ void CameraCapture::onCaptureData(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffe
                 capture->m_bufferExtra.push_back(buffer->data[n]);
         }
         if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
-            capture->m_handler(capture->m_bufferExtra.data(), capture->m_bufferExtra.size(), 2);
+            capture->m_handlerFrame(capture->m_bufferExtra.data(), capture->m_bufferExtra.size(), 2);
         }
         mmal_buffer_header_mem_unlock(buffer);
-    }else
-        if(buffer->cmd==0 && capture->m_handler && buffer->length>0) {
+    }else {
+        if(buffer->cmd==0 && capture->m_handlerFrame && buffer->length>0) {
             mmal_buffer_header_mem_lock(buffer);
             capture->m_bufferFrame.insert(capture->m_bufferFrame.end(), buffer->data, buffer->data+buffer->length);
             mmal_buffer_header_mem_unlock(buffer);
@@ -160,10 +157,11 @@ void CameraCapture::onCaptureData(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffe
                 capture->m_bufferFrame[2]=len&0xFF; len>>=8;
                 capture->m_bufferFrame[1]=len&0xFF; len>>=8;
                 capture->m_bufferFrame[0]=len&0xFF; len>>=8;
-                capture->m_handler(capture->m_bufferFrame.data(), capture->m_bufferFrame.size(), buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME ? 1 : 0);
+                capture->m_handlerFrame(capture->m_bufferFrame.data(), capture->m_bufferFrame.size(), buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME ? 1 : 0);
                 capture->m_bufferFrame.clear();
             }
         }
+    }
 
     mmal_buffer_header_release(buffer);
 
@@ -212,12 +210,12 @@ bool CameraCapture::Start() {
 
         format->encoding=MMAL_ENCODING_OPAQUE;
         format->encoding_variant = MMAL_ENCODING_I420;
-        format->es->video.width = VCOS_ALIGN_UP(FRAME_WIDTH, 32);
-        format->es->video.height = VCOS_ALIGN_UP(FRAME_HEIGHT, 16);
+        format->es->video.width = VCOS_ALIGN_UP(WIDTH_CAPTURE, 32);
+        format->es->video.height = VCOS_ALIGN_UP(HEIGHT_CAPTURE, 16);
         format->es->video.crop.x = 0;
         format->es->video.crop.y = 0;
-        format->es->video.crop.width = FRAME_WIDTH;
-        format->es->video.crop.height = FRAME_HEIGHT;
+        format->es->video.crop.width = WIDTH_CAPTURE;
+        format->es->video.crop.height = HEIGHT_CAPTURE;
         format->es->video.frame_rate.num = CAPTURE_FRAME_RATE_NUM;
         format->es->video.frame_rate.den = CAPTURE_FRAME_RATE_DEN;
 
@@ -264,10 +262,10 @@ bool CameraCapture::Start() {
 void CameraCapture::annotateUpdate() {
     MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T annotate={{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T)}};
     annotate.enable=1;
-    //annotate.custom_text_colour = MMAL_TRUE;
-    //annotate.custom_text_Y = 149; //RGB2Y(0, 1, 0);
-    //annotate.custom_text_U = 43;//RGB2U(0, 1, 0);
-    //annotate.custom_text_V = 21;
+    annotate.custom_text_colour = MMAL_TRUE;
+    annotate.custom_text_Y = 149; //RGB2Y(0, 1, 0);
+    annotate.custom_text_U = 43;//RGB2U(0, 1, 0);
+    annotate.custom_text_V = 21;
     std::time_t now=std::time(nullptr);
     std::tm tm = *std::localtime(&now);
     std::strftime(annotate.text, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3-1, "%d.%m.%Y %H:%M:%S", &tm);
@@ -281,27 +279,30 @@ void CameraCapture::annotateUpdate() {
 
 void CameraCapture::Stop() {
     try {
-        MMAL_PORT_T* portCapture=m_camera.Get()->output[MMAL_CAMERA_VIDEO_PORT];
-        MMAL_STATUS_T status=mmal_port_parameter_set_boolean(portCapture, MMAL_PARAMETER_CAPTURE, 0);
-        if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
-
-        //status = mmal_port_disable(camera.Get()->control);
-        //if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
-
+        std::cout<<"disable port"<<std::endl;
         MMAL_PORT_T* portEncoderOutput=m_encoder->output[0];
-        status=mmal_port_disable(portEncoderOutput);
+        MMAL_STATUS_T status=mmal_port_disable(portEncoderOutput);  //Здесь виснет
         if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
 
+        std::cout<<"stop port"<<std::endl;
+        MMAL_PORT_T* portCapture=m_camera.Get()->output[MMAL_CAMERA_VIDEO_PORT];
+        status=mmal_port_parameter_set_boolean(portCapture, MMAL_PARAMETER_CAPTURE, 0);
+        if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
+
+        std::cout<<"disable connection"<<std::endl;
         status=mmal_connection_disable(m_connection);
         if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
 
+        std::cout<<"destroy connection"<<std::endl;
         status=mmal_connection_destroy(m_connection);
         if (status != MMAL_SUCCESS) throw MmalException(__FILE__, __LINE__, status);
         m_connection=nullptr;
 
+        std::cout<<"destroy component"<<std::endl;
         mmal_component_destroy(m_encoder);
         m_encoder=nullptr;
 
+        std::cout<<"destroy pool"<<std::endl;
         if(m_poolEncoder) {
             mmal_pool_destroy(m_poolEncoder);
             m_poolEncoder=nullptr;
@@ -311,4 +312,5 @@ void CameraCapture::Stop() {
     }catch(const std::string& e) {
         std::cerr<<e<<std::endl;
     }
+    std::cout<<"stopped"<<std::endl;
 }

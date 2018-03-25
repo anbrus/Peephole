@@ -2,6 +2,7 @@
 
 #include "camera.h"
 #include "mmalexception.h"
+#include "config.h"
 
 #include "interface/mmal/util/mmal_util.h"
 
@@ -11,9 +12,6 @@
 
 #define PREVIEW_FRAME_RATE_NUM 5
 #define PREVIEW_FRAME_RATE_DEN 1
-
-#define FRAME_WIDTH 1920
-#define FRAME_HEIGHT 1080
 
 CameraPreviewPort::CameraPreviewPort()
 {
@@ -70,12 +68,12 @@ bool CameraPreviewPort::Run(const Camera& camera) {
         MMAL_ES_FORMAT_T *format = portPreview->format;
 
         format->encoding = MMAL_ENCODING_I420;
-        format->es->video.width = VCOS_ALIGN_UP(FRAME_WIDTH, 32);
-        format->es->video.height = VCOS_ALIGN_UP(FRAME_HEIGHT, 16);
+        format->es->video.width = VCOS_ALIGN_UP(WIDTH_PREVIEW, 32);
+        format->es->video.height = VCOS_ALIGN_UP(HEIGHT_PREVIEW, 16);
         format->es->video.crop.x = 0;
         format->es->video.crop.y = 0;
-        format->es->video.crop.width = FRAME_WIDTH;
-        format->es->video.crop.height = FRAME_HEIGHT;
+        format->es->video.crop.width = WIDTH_PREVIEW;
+        format->es->video.crop.height = HEIGHT_PREVIEW;
         format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
         format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
 

@@ -21,7 +21,7 @@ extern "C" {
 Controller* pController=nullptr;
 
 Controller::Controller():
-    m_md(SCREEN_WIDTH, SCREEN_HEIGHT, AV_PIX_FMT_RGB565),
+    m_md(WIDTH_SCREEN, HEIGHT_SCREEN, AV_PIX_FMT_RGB565),
     m_captureVideo(m_cam)
 {
     pController=this;
@@ -34,12 +34,12 @@ Controller::~Controller() {
 uint8_t* Controller::getScreenImage(const uint8_t* frame, size_t length) {
     uint8_t* dataInput[4];
     int linesizesInput[4];
-    av_image_fill_linesizes(linesizesInput, AV_PIX_FMT_YUV420P, 1920);
-    av_image_fill_pointers(dataInput, AV_PIX_FMT_YUV420P, 1088, const_cast<uint8_t*>(frame), linesizesInput);
-    int linesizes[1]={ SCREEN_WIDTH*2 };
+    av_image_fill_linesizes(linesizesInput, AV_PIX_FMT_YUV420P, WIDTH_PREVIEW);
+    av_image_fill_pointers(dataInput, AV_PIX_FMT_YUV420P, ((HEIGHT_PREVIEW+15)/16)*16, const_cast<uint8_t*>(frame), linesizesInput);
+    int linesizes[1]={ WIDTH_SCREEN*2 };
     uint8_t* bufImage[4];
-    bufImage[0]=new uint8_t[SCREEN_WIDTH*SCREEN_HEIGHT*2];
-    if(sws_scale(m_contextScale, dataInput, linesizesInput, 0, 1080, bufImage, linesizes)!=SCREEN_HEIGHT) {
+    bufImage[0]=new uint8_t[WIDTH_SCREEN*HEIGHT_SCREEN*2];
+    if(sws_scale(m_contextScale, dataInput, linesizesInput, 0, HEIGHT_PREVIEW, bufImage, linesizes)!=HEIGHT_SCREEN) {
         std::cerr<<"Scale failed"<<std::endl;
         delete[] bufImage[0];
         return nullptr;
@@ -52,9 +52,9 @@ void Controller::onPreviewFrame(const uint8_t* data, size_t length) {
     const uint8_t* imageScreen=getScreenImage(data, length);
     if(!imageScreen) return;
 
-    m_wnd.ShowFrame(imageScreen, SCREEN_WIDTH*SCREEN_HEIGHT*2);
+    m_wnd.ShowFrame(imageScreen, WIDTH_SCREEN*HEIGHT_SCREEN*2);
     if(m_counterCameraInit==0) {
-        if(m_counterPreviewFrame%5==0 && m_md.Detect(imageScreen, SCREEN_WIDTH*SCREEN_HEIGHT*2)) {
+        if(m_counterPreviewFrame%5==0 && m_md.Detect(imageScreen, WIDTH_SCREEN*HEIGHT_SCREEN*2)) {
             if(m_captureInProgress) updateMotionTime();
             else postRunnable([this] { startCapture(); });
         }
@@ -73,8 +73,14 @@ void Controller::onCaptureFrame(const uint8_t* data, size_t length, int typeFram
     }
 
     std::chrono::steady_clock::duration elapsed=std::chrono::steady_clock::now()-m_timeLastMotion;
-    if(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()>POST_MOTION_SECONDS)
-        postRunnable([this] { stopCapture(); });
+    if(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()>POST_MOTION_SECONDS) {
+        if(!m_captureStopInProgress) {
+            m_captureStopInProgress=true;
+            postRunnable([this] {
+                stopCapture();
+            });
+        }
+    }
 }
 
 void Controller::onCaptureAudio(const uint8_t* data, size_t length) {
@@ -110,11 +116,16 @@ void Controller::stopCapture() {
     std::cout<<"Stop capture"<<std::endl;
 
     m_captureVideo.Stop();
+    std::cout<<"Video stopped"<<std::endl;
     m_captureAudio.Stop();
+    std::cout<<"Audio stopped"<<std::endl;
     m_file.WriteTrailer();
+    std::cout<<"Trailer writed"<<std::endl;
     m_file.Close();
 
     m_captureInProgress=false;
+    m_captureStopInProgress=false;
+    std::cout<<"Stop completed"<<std::endl;
 }
 
 void Controller::postRunnable(const std::function<void()>& runnable) {
@@ -137,8 +148,8 @@ int Controller::Run() {
 
     m_wnd.Show();
     m_contextScale=sws_getContext(
-        1920, 1080, AV_PIX_FMT_YUV420P,
-        SCREEN_WIDTH, SCREEN_HEIGHT, AV_PIX_FMT_RGB565,
+        WIDTH_PREVIEW, HEIGHT_PREVIEW, AV_PIX_FMT_YUV420P,
+        WIDTH_SCREEN, HEIGHT_SCREEN, AV_PIX_FMT_RGB565,
         SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
     if(!m_cam.Create()) return 1;
@@ -147,14 +158,14 @@ int Controller::Run() {
     p.SetPreviewHandler([this](const uint8_t* data, size_t length) { onPreviewFrame(data, length); });
     p.Run(m_cam);
 
-    m_captureVideo.SetCaptureHandler([this](const uint8_t* data, size_t length, int typeFrame) { onCaptureFrame(data, length, typeFrame); });
+    m_captureVideo.SetCaptureHandler([this](const uint8_t* data, size_t length, int typeFrame) { return onCaptureFrame(data, length, typeFrame); });
     m_captureAudio.SetCaptureHandler([this](const uint8_t* data, size_t length) { onCaptureAudio(data, length); });
 
-    while(m_counterCameraInit) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    /*startCapture();
+    /*while(m_counterCameraInit) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    startCapture();
     std::this_thread::sleep_for(std::chrono::seconds(4));
     stopCapture();
-    startCapture();
+    /*startCapture();
     std::this_thread::sleep_for(std::chrono::seconds(4));
     stopCapture();*/
 

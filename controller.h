@@ -12,10 +12,7 @@
 #include <functional>
 #include <condition_variable>
 
-#define SCREEN_WIDTH 480
-#define SCREEN_HEIGHT 320
-
-#define POST_MOTION_SECONDS 5
+#define POST_MOTION_SECONDS 10
 
 class Controller
 {
@@ -36,6 +33,7 @@ private:
     int m_counterCameraInit=20;
     int m_counterPreviewFrame=0;
     bool m_captureInProgress=false;
+    bool m_captureStopInProgress=false;
     std::chrono::steady_clock::time_point m_timeLastMotion;
     std::queue<std::function<void()>> m_queue;
     std::condition_variable m_cvQueue;

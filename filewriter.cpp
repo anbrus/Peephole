@@ -13,7 +13,10 @@ FileWriter::FileWriter()
 }
 
 FileWriter::~FileWriter() {
-    avformat_free_context(m_context);
+    if(m_context) {
+        avformat_free_context(m_context);
+        m_context=nullptr;
+    }
 }
 
 bool FileWriter::Create(const std::string pathFile) {
@@ -97,13 +100,6 @@ bool FileWriter::WriteVideo(const uint8_t* data, int length, bool isKeyFrame) {
         std::clog<<e.GetFile()<<"("<<e.GetLine()<<"): "<<e.what()<<std::endl;
     }
     m_ptsVideo++;
-
-    //flush
-    //res=av_interleaved_write_frame(m_context, nullptr);
-    //if(res<0) {
-    //    AvException e(__FILE__, __LINE__, res);
-    //    std::clog<<e.GetFile()<<"("<<e.GetLine()<<"): "<<e.what()<<std::endl;
-    //}
 }
 
 bool FileWriter::WriteAudio(const uint8_t* data, int length) {
@@ -127,11 +123,23 @@ bool FileWriter::WriteAudio(const uint8_t* data, int length) {
 }
 
 bool FileWriter::WriteTrailer() {
+    //flush
+    int res=av_interleaved_write_frame(m_context, nullptr);
+    if(res<0) {
+        AvException e(__FILE__, __LINE__, res);
+        std::clog<<e.GetFile()<<"("<<e.GetLine()<<"): "<<e.what()<<std::endl;
+    }
+
     av_write_trailer(m_context);
 }
 
 void FileWriter::Close() {
+    if(!m_context) return;
+
     //avcodec_free_context(&m_context->streams[0]->codec);
+    AVIOContext *pb=m_context->pb;
     avformat_free_context(m_context);
+    if(pb) avio_close(pb);
+
     m_context=nullptr;
 }

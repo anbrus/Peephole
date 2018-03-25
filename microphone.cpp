@@ -90,11 +90,12 @@ bool Microphone::Start() {
     dma[3].CS=0b00000000000000000000000000000001;
 
     volatile bcm2835_pcm* pcm=reinterpret_cast<volatile bcm2835_pcm*>(peripheralPcm.map);
+    pcm->cs_a=  CS_A_STBY | CS_A_RXERR | CS_A_RXCLR | CS_A_EN; //0b00000010000000010000000000010001; //EN=1 STBY=1 RXCLR=1 RXERR=1
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     pcm->cs_a=  CS_A_SYNC | CS_A_STBY | CS_A_RXERR | CS_A_RXCLR | CS_A_EN; //0b00000010000000010000000000010001; //EN=1 STBY=1 RXCLR=1 RXERR=1
     pcm->mode_a=0b00000111000000000111110000010000;
-    //pcm->dreq_a=
     pcm->rxc_a= 0b01000000000010000100000100001000;
-    while(pcm->cs_a & (CS_A_SYNC)) ;
+    while(!(pcm->cs_a & CS_A_SYNC)) ;
     pcm->cs_a=  CS_A_STBY | CS_A_RXON | CS_A_EN | CS_A_DMAEN | 0<<7; //0b00000010000000000000001010000011;
 }
 
